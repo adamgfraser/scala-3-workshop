@@ -1,6 +1,63 @@
+import javax.sql.DataSource
+import UnionTypeExample.SubscriptionService
+import UnionTypeExample.PersistenceService
+import UnionTypeExample.ZIO
+import UnionTypeExample.PersistenceError
+import UnionTypeExample.SubscriptionError
 /**
  * Scala 3 introduces several new types that increase the power of the Scala type system.
  */
+
+object Scala2Example {
+
+  trait DataSource
+
+  trait Closeable
+
+  type MyDataSource = DataSource with Closeable
+}
+
+object WithExamples extends App {
+
+  trait Greeter {
+    def hi: String
+    def greet(name: String): String
+  }
+
+  trait Welcomer {
+    def welcome(name: String): String
+    def greet(name: String): String
+  }
+
+  trait DefaultGreeter extends Greeter {
+    def hi: String = "Hello"
+    def greet(name: String): String = s"Hi, $name"
+  }
+
+  trait DefaultWelcomer extends Welcomer {
+    def welcome(name: String): String = s"Welcome, $name"
+    def greet(name: String): String = s"Welcome, $name"
+  }
+
+  trait DefaultGreeterWithWelcomer extends DefaultGreeter with DefaultWelcomer {
+    override def greet(name: String): String = super.greet(name)
+  }
+
+  trait DefaultWelcomerWithGreeter extends DefaultWelcomer with DefaultGreeter {
+    override def greet(name: String): String = super.greet(name)
+  }
+
+  val greeter1 = new DefaultGreeterWithWelcomer {}
+  val greeter2 = new DefaultWelcomerWithGreeter {}
+
+  println(greeter1.greet("Adam"))
+  println(greeter2.greet("Adam"))
+
+  def IsEqual[A, B](using ev: A =:= B) = ()
+
+  IsEqual[Welcomer & Greeter, Greeter & Welcomer]
+
+}
 
 /**
  * INTERSECTION TYPES
@@ -38,7 +95,7 @@ object intersection_types:
    * Form the intersection of the types `HasLogging` and `HasUserRepo` by using the type 
    * intersection operator `&`.
    */
-  type HasLoggingAndUserRepo
+  type HasLoggingAndUserRepo = HasLogging & HasUserRepo
 
   /**
    * EXERCISE 2
@@ -46,9 +103,9 @@ object intersection_types:
    * Using the `IsEqual` helper method, test to see if the type `HasLogging & HasUserRepo` is the 
    * same as the type `HasUserRepo & HasLogging`.
    */
-  // IsEqual ...
-
   def IsEqual[A, B](using ev: A =:= B) = ()
+
+  IsEqual[HasLogging & HasUserRepo, HasUserRepo & HasLogging]
 
   /**
    * EXERCISE 3
@@ -57,7 +114,42 @@ object intersection_types:
    * 
    * Create class that has the type `HasUserRepo & HasLogging`.
    */
-  class BothUserRepoAndLogging
+  class BothUserRepoAndLogging extends HasUserRepo with HasLogging:
+    def logging: Logging = TestLogging
+    def userRepo: UserRepo = TestUserRepo
+
+object UnionTypeExample {
+
+  // Persistence service
+  // Subscription service
+
+  trait PersistenceService
+  trait SubscriptionService
+
+  sealed trait PersistenceError // lots of subtypes of this
+  sealed trait SubscriptionError // lots of subtypes of this
+
+  trait ZIO[-R, +E, +A] {
+    def map[B](f: A => B): ZIO[R, E, B] = ???
+    def flatMap[R1, E1, B](f: A => ZIO[R1, E1, B]): ZIO[R & R1, E | E1, B] = ???
+  }
+
+  extension [R, E1, E2, A] (zio: ZIO[R, E1 | E2, A]) def handleSome[A1 >: A](f: E1 => A): ZIO[R, E2, A] =
+    ???
+
+  type X = PersistenceError | SubscriptionError
+
+  val persistSomething: ZIO[PersistenceService, PersistenceError, Unit] = ???
+  val subscribeToSomething: ZIO[SubscriptionService, SubscriptionError, Unit] = ???
+
+  val doSomething: ZIO[PersistenceService & SubscriptionService, PersistenceError | SubscriptionError, Unit] =
+    for {
+      _ <- persistSomething
+      _ <- subscribeToSomething
+    } yield ()
+
+  // val doSomething2 = doSomething.handleSome((e: PersistenceError) => println(e))
+}
 
 /**
  * UNION TYPES
@@ -84,7 +176,7 @@ object union_types:
    * Form the union of the types `PaymentDenied` and `MissingAddress` using the type union 
    * operator `|`.
    */
-  type PaymentDeniedOrMissingAddress
+  type PaymentDeniedOrMissingAddress = PaymentDenied | MissingAddress
 
   /**
    * EXERCISE 2
@@ -92,7 +184,8 @@ object union_types:
    * Create a value of type `PaymentDeniedOrMissingAddress` by assigning the following variable to 
    * a `PaymentDenied` error.
    */
-  val example1: PaymentDeniedOrMissingAddress = ???
+  val example1: PaymentDeniedOrMissingAddress =
+    PaymentDenied("Payment denied")
 
   /**
    * EXERCISE 3
@@ -100,7 +193,8 @@ object union_types:
    * Create a value of type `PaymentDeniedOrMissingAddress` by assigning the following variable to 
    * a `MissingAddress` error.
    */
-  val example2: PaymentDeniedOrMissingAddress = ???
+  val example2: PaymentDeniedOrMissingAddress =
+    MissingAddress("ah!")
 
   /**
    * EXERCISE 4
@@ -108,7 +202,9 @@ object union_types:
    * Perform a pattern match on `example2`, covering each possibility and printing out the 
    * error messages to the console.
    */
-  // example2 match 
+  example2 match
+    case PaymentDenied(message) => println(s"Payment denied: $message")
+    case MissingAddress(message) => println(s"Missing address: $message") 
 
   /**
    * EXERCISE 5

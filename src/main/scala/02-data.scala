@@ -15,21 +15,24 @@
  * Enums and case classes provide first-class support for "algebraic data types" 
  * in Scala 3.
  */
+
+// product types (A and B) final case class Person(name: String, age: Int)
+// sum types (A or B) enum
+
 package enums: 
   /**
    * EXERCISE 1
    * 
    * Convert this "sealed trait" to an enum.
    */
-  sealed trait DayOfWeek
-  object DayOfWeek:
-    case object Sunday extends DayOfWeek
-    case object Monday extends DayOfWeek
-    case object Tuesday extends DayOfWeek
-    case object Wednesday extends DayOfWeek
-    case object Thursday extends DayOfWeek
-    case object Friday extends DayOfWeek
-    case object Saturday extends DayOfWeek
+  enum DayOfWeek extends Enum[DayOfWeek]:
+    case Sunday
+    case Monday
+    case Tuesday
+    case Wednesday
+    case Thursday
+    case Friday
+    case Saturday
 
   /**
    * EXERCISE 2
@@ -38,8 +41,8 @@ package enums:
    * this interop with Java enums by finding all values of `DayOfWeek`, and by finding the value 
    * corresponding to the string "Sunday".
    */
-  def daysOfWeek: Array[DayOfWeek] = ???
-  def sunday: DayOfWeek = ???
+  def daysOfWeek: Array[DayOfWeek] = DayOfWeek.values
+  def sunday: DayOfWeek = DayOfWeek.valueOf("Sunday")
 
   /**
    * EXERCISE 3
@@ -48,12 +51,13 @@ package enums:
    * 
    * Take special note of the inferred type of any of the case constructors!
    */
-  sealed trait Color 
-  object Color:
-    case object Red extends Color 
-    case object Green extends Color 
-    case object Blue extends Color
-    final case class Custom(red: Int, green: Int, blue: Int) extends Color
+  enum Color:
+    case Red
+    case Green
+    case Blue
+    case Custom(red: Int, green: Int, blue: Int)
+
+  val myColor: Color = Color.Custom(123, 23, 5)
 
   /**
    * EXERCISE 4
@@ -62,10 +66,9 @@ package enums:
    * 
    * Take special note of the inferred type parameters in the case constructors!
    */
-  sealed trait Result[+Error, +Value]
-  object Result:
-    final case class Succeed[Value](value: Value) extends Result[Nothing, Value]
-    final case class Fail[Error](error: Error) extends Result[Error, Nothing]
+  enum Result[+Error, +Value]:
+    case Succeed[+Value](value: Value) extends Result[Nothing, Value]
+    case Fail[+Error](error: Error) extends Result[Error, Nothing]
 
   /**
    * EXERCISE 5
@@ -74,19 +77,17 @@ package enums:
    * 
    * Take special note of the inferred type parameters in the case constructors!
    */
-  sealed trait Workflow[-Input, +Output]
-  object Workflow:
-    final case class End[Output](value: Output) extends Workflow[Any, Output]
+  enum Workflow[-Input, +Output]:
+    case End[Output](value: Output) extends Workflow[Any, Output]
 
   /**
    * EXERCISE 6
    * 
    * Convert this "sealed trait" to an enum.
    */
-  sealed trait Conversion[-From, +To]
-  object Conversion:
-    case object AnyToString extends Conversion[Any, String]
-    case object StringToInt extends Conversion[String, Option[Int]]
+  enum Conversion[-From, +To]:
+    case AnyToString extends Conversion[Any, String]
+    case StringToInt extends Conversion[String, Option[Int]]
 
 /**
  * CASE CLASSES
@@ -100,9 +101,10 @@ package case_classes:
    * By making the public constructor private, make a smart constructor for `Email` so that only 
    * valid emails may be created.
    */
-  final case class Email(value: String)
+  final case class Email private (value: String)
   object Email:
-    def fromString(v: String): Option[Email] = ???
+    def fromString(v: String): Option[Email] =
+      if (isValidEmail(v)) Some(Email(v)) else None
 
     def isValidEmail(v: String): Boolean = v.matches("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$")
 
@@ -112,7 +114,8 @@ package case_classes:
    * Try to make a copy of an existing `Email` using `Email#copy` and note what happens.
    * 
    */
-  def changeEmail(email: Email): Email = ???
+  def changeEmail(email: Email): Email =
+    ???
 
   /**
    * EXERCISE 3
@@ -133,12 +136,15 @@ object pattern_matching:
    * 
    * Remove the unsound usage of `ClassTag` from this pattern match, replacing it with `Typeable`.
    */
-  // def getT[T: scala.reflect.ClassTag](list: List[Any]): Option[T] = 
+  // def getT[T <: Matchable](list: List[Any])(implicit ev: scala.reflect.TypeTest[T, Any]): Option[T] = 
   //   list match 
   //     case (head : T) :: _ => Some(head)
   //     case _ => None 
 
   val h :: t = ::("foo", Nil)
+
+  val x = 1
+  val y = 2
 
   /**
    * EXERCISE 2
@@ -147,5 +153,5 @@ object pattern_matching:
    * comprehension.
    */
   for
-    (l, r) <- Some((19, 42))
+    (l, r) <- Some((x, y))
   yield l + r
