@@ -4,6 +4,8 @@ import UnionTypeExample.PersistenceService
 import UnionTypeExample.ZIO
 import UnionTypeExample.PersistenceError
 import UnionTypeExample.SubscriptionError
+import OpaqueTypesGraduation.Definition.ViewedPercentage
+
 /**
  * Scala 3 introduces several new types that increase the power of the Scala type system.
  */
@@ -216,12 +218,29 @@ object union_types:
 
   type SomeList = List[String] | List[Int]
 
+
+object MatchingExample {
+
+  List(1, 2, 3) match {
+    case h :: t => ???
+    case Nil    => ???
+  }
+
+  // type Weird[A] = A match {
+  //   case Int => String
+  //   case String => Int
+  // }
+}
+
 /**
  * MATCH TYPES
  * 
  * Match types bring the `match` construct to the type level, allowing the creation of type-level 
  * functions that return different types depending on the (statically known) input types.
  */
+
+// def combine[L, R](L, R): ???
+
 object match_types:
   type Combine[Left, Right] = Left match
     case Unit => Right 
@@ -230,26 +249,42 @@ object match_types:
         case Unit => Left 
         case ? => (Left, Right)
 
+
+  type Result1 = Combine[Unit, Unit]
+  type Result2 = Combine[Unit, Int]
+  type Result3 = Combine[Int, Unit]
+  type Result4 = Combine[Int, Int]
+
+  def isSameType[A, B](using A =:= B) = ()
+
+  isSameType[Result1, Unit]
+  isSameType[Result2, Int]
+  isSameType[Result3, Int]
+  isSameType[Result4, (Int, Int)]
+
   /**
    * EXERCISE 1
    * 
    * Construct a value of the appropriate type, which is computed using the match type `Combine`.
    */
-  val unitAndString: Combine[Unit, String] = ???
+  val unitAndString: Combine[Unit, String] =
+    "foo"
 
   /**
    * EXERCISE 2
    * 
    * Construct a value of the appropriate type, which is computed using the match type `Combine`.
    */
-  val stringAndUnit: Combine[String, Unit] = ???
+  val stringAndUnit: Combine[String, Unit] =
+    "bar"
 
   /**
    * EXERCISE 3
    * 
    * Construct a value of the appropriate type, which is computed using the match type `Combine`.
    */
-  val stringAndString: Combine[String, String] = ???
+  val stringAndString: Combine[String, String] =
+    ("foo", "bar")
 
   /**
    * EXERCISE 4
@@ -261,7 +296,30 @@ object match_types:
    * Create a match type that will return Scala's `Vector` for all types except primitive types,
    * but for primitive types, will return Scala's `Array`.
    */
-  type Collection[X]
+  type Collection[X] = X match
+    case Boolean => Array[Boolean]
+    case Byte    => Array[Byte]
+    case Long    => Array[Long]
+    case Short   => Array[Short]
+    case Unit    => Array[Unit]
+    case Double  => Array[Double]
+    case Char    => Array[Char]
+    case Int => Array[Int]
+    case ?   => Vector[X]
+
+  def loadData[X]: Collection[X] =
+    ???
+
+  final case class Person(name: String, age: Int)
+
+  val x = loadData[Int]
+  val y = loadData[Person]
+
+  type MyList = List[Int]
+  type MySuperNestedList = List[List[List[List[List[Int]]]]]
+
+  val z: ElementType[MyList] = 7
+  val a: ElementType[MySuperNestedList] = 7
 
   /**
    * EXERCISE 5
@@ -275,6 +333,11 @@ object match_types:
     case Iterable[t] => ElementType[t]
     case AnyVal => X
 
+  // headOf(1)
+  // headOf(List(1, 2, 3)) == 1
+  // headOf(List(List(1, 2, 3))) == 1
+  // headOf("Adam") == 'A'
+
   /**
    * EXERCISE 6
    * 
@@ -282,7 +345,64 @@ object match_types:
    * `head` function which returns the head of the specified value (a character of a string, 
    * or the first element of an array or iterable, or the passed in value, otherwise).
    */
-  def headOf[X](x: X): ElementType[X] = ???
+  def headOf[X](x: X): ElementType[X] =
+    x.asInstanceOf[Matchable] match
+      case string: String => string.head.asInstanceOf[ElementType[X]]
+      case array: Array[_] => headOf(array.head).asInstanceOf[ElementType[X]]
+      case iterable: Iterable[_] => headOf(iterable.head).asInstanceOf[ElementType[X]]
+      case anyVal: AnyVal => anyVal.asInstanceOf[ElementType[X]]
+
+  val example1 = headOf(1)
+  val example2 = headOf(List(1, 2, 3))
+  val example3 = headOf(List(List(1, 2, 3)))
+  val example4 = headOf("Adam")
+
+object Definitions:
+  opaque type Password <: String = String
+  object Password:
+    def apply(string: String): Password = string
+  opaque type FirstName <: String = String
+  object FirstName:
+    def apply(string: String): FirstName = string
+  opaque type LastName <: String = String
+  object LastName:
+    def apply(string: String): LastName = string
+
+object Newtypes {
+  import Definitions.*
+
+  // new types problem
+
+  // how do we disambiguiate different domain types that have the same scala type
+
+  // String
+  // First name, Last name, password, welcome message
+
+  def saveUserToSecureDatabse(firstName: FirstName, lastName: LastName, password: Password): Unit =
+    ???
+
+  val password = Password("password")
+  val firstName = FirstName("John")
+  val lastName = LastName("Doe")
+
+  // final class FirstName(val value: String) extends AnyVal {
+  //   def toUpperCase: FirstName =
+  //     new FirstName(value.toUpperCase.asInstanceOf[String])
+  // }
+  // final class LastName(val value: String) extends AnyVal
+  // final class Password(val value: String) extends AnyVal
+
+  // final case class FirstName(value: String)
+
+  // val x: String = firstName.toUpperCase
+
+  saveUserToSecureDatabse(firstName, lastName, password)
+}
+
+// opaque types are different types at compile time
+// they don't exist at all at runtime
+
+implicit def isSameType[A, B](using A =:= B): Unit = ()
 
 /**
  * OPAQUE TYPES
@@ -302,7 +422,12 @@ object opaque_types:
        * The scope of an opaque type has special privileges. Create a constructor for email that
        * takes a string, and returns an `Email`.
        */
-      def apply() = ???
+      // def apply(string: String): Email =
+      //   string
+
+      def fromString(string: String): Option[Email] =
+        if string.contains("@") then Some(string) else None
+
     end Email
 
     /**
@@ -311,7 +436,8 @@ object opaque_types:
      * Define an extension method to retrieve the username of an email (the part before the '@' 
      * character).
      */
-    extension (e: Email) def username: String = ???
+    extension (e: Email) def username: String =
+      e.split('@').head
   end email_example
 
   import email_example.*
@@ -321,7 +447,13 @@ object opaque_types:
    * 
    * Use the constructor you made to build an `Email` value given a `String`.
    */
-  lazy val exampleEmail: Email = ???
+  lazy val exampleEmail: Option[Email] =
+    Email.fromString("adam@ziverge.com")
+
+  // Inside the scope we know that Email === String
+  // Outside scope we think that Email <: String
+
+  
 
   /**
    * EXERCISE 4
@@ -340,7 +472,7 @@ object opaque_types:
      * relationship must be true and it will be "exported" outside the scope in which the opaque
      * type is defined.
      */
-    opaque type Natural = Int
+    opaque type Natural <: Int = Int
 
     object Natural:
       /**
@@ -349,7 +481,8 @@ object opaque_types:
        * Define a smart constructor that, given an `Int`, may or may not return a `Natural`, 
        * depending on whether the number is a natural number (non-negative) or not.
        */
-      def fromInt(i: Int): Option[Natural] = ???
+      def fromInt(i: Int): Option[Natural] =
+        if i >= 0 then Some(i) else None
     end Natural
   end natural_example
 
@@ -361,16 +494,85 @@ object opaque_types:
    * Construct an example natural number from the number 5, and call `get` on the `Option` because
    * you know it is a natural number.
    */
-  lazy val exampleNatural: Natural = ???
+  lazy val exampleNatural: Natural =
+    Natural.fromInt(5).get
 
   /**
    * EXERCISE 8
    * 
    * Try to pass the natural number to the function `printInt` and note your findings.
    */
-  printInt(???)
+  printInt(exampleNatural)
 
   def printInt(v: Int): Unit = println(v.toString())
+
+object OpaqueTypesGraduation:
+
+  object TypeClassDefinition:
+
+    type Json = String
+
+    trait JsonEncoder[-A]:
+      extension (a: A) def toJson: Json
+
+  end TypeClassDefinition
+
+  object Definition:
+    import TypeClassDefinition.*
+
+    opaque type ViewedPercentage <: Double = Double
+
+    object ViewedPercentage:
+
+      def fromDouble(d: Double): Option[ViewedPercentage] =
+        if d >= 0 && d <= 100.0 then Some(d) else None
+
+      // rounding would be nice to add later...    
+      extension (vp: ViewedPercentage) def prettyPrint: String =
+        s"${vp * 100}%"
+
+      given JsonEncoder[ViewedPercentage] with
+        extension (vp: ViewedPercentage) def toJson: Json =
+          vp.prettyPrint
+
+    end ViewedPercentage
+
+  end Definition
+
+  object Use:
+    import Definition.*
+
+    val viewedPercentage: ViewedPercentage =
+      ViewedPercentage.fromDouble(0.55).get
+
+    // Do something with a viewed percentage that treats it as a double
+    val total = 1000
+    val viewed = total * viewedPercentage / 100
+
+    // Define and use a extension method that is specified to the viewed
+    // percentage type
+    // define and use a prettyPrint extension method that prints the viewed
+    // percentage in an appropriate way
+    viewedPercentage.prettyPrint
+
+    viewedPercentage.toJson
+
+  end Use
+
+end OpaqueTypesGraduation
+
+object Polymorphic {
+
+  // universally quantified function
+  // for any A I can apply this function
+
+  trait Identity {
+    def apply[A, B](a: A, b: B): (B, A) = (b, a)
+  }
+
+  // for a particular A I can apply this function
+  def swap[A, B](a: A, b: B): (B, A) = (b, a)
+}
 
 /**
  * POLYMORPHIC FUNCTION TYPES
@@ -387,15 +589,18 @@ object polymorphic_functions:
    * 
    * Define a polymorphic function `firstFn` that does exactly what the method `firstMethod` does.
    */
-  lazy val firstFn = ???
+  lazy val firstFn: [A, B] => (A, B) => A = [A, B] => (a: A, b: B) => a
   def firstMethod[A, B](tuple: (A, B)): A = tuple._1
+
+  val first1 = firstFn(1, "Hello")
+  val first2 = firstFn("Hello", 1)
 
   /**
    * EXERCISE 2
    * 
    * Define a polymorphic function `secondFn` that does exactly what the method `secondMethod` does.
    */
-  lazy val secondFn = ???
+  lazy val secondFn: [A, B] => (A, B) => B = [A, B] => (a: A, b: B) => b
   def secondMethod[A, B](tuple: (A, B)): B = tuple._2
 
 /**
@@ -408,14 +613,26 @@ object dependent_functions:
   trait Entry:
     type Out
 
+  trait StringEntry extends Entry:
+    type Out = String
+
+  trait IntEntry extends Entry:
+    type Out = Int
+
+  val x = new StringEntry {}
+  val y = new IntEntry {}
+
   def getMethod(entry: Entry): entry.Out = ???
+
+  val out1: String = getMethod(x)
+  val out2: Int = getMethod(y)
 
   /**
    * EXERCISE 1
    * 
    * Explicitly provide a type signature for `getFn`.
    */
-  lazy val getFn = (e: Entry) => getMethod(e)
+  lazy val getFn: (entry: Entry) => entry.Out = (entry: Entry) => getMethod(entry)
 
   trait Combine[L, R]:
     type Out
@@ -428,8 +645,82 @@ object dependent_functions:
    * Define a polymorphic function `combineFn` that does exactly what the method 
    * `combineMethod` does.
    */
-  lazy val combineFn = ???
+  lazy val combineFn: [L, R] => (l: L, r: R, c: Combine[L, R]) => c.Out =
+    [L, R] => (l: L, r: R, c: Combine[L, R]) => c.combine(l, r)
   def combineMethod[L, R](l: L, r: R, c: Combine[L, R]): c.Out = c.combine(l, r)
+
+object TypeLambdasIntro {
+
+  def foldLeft[A, B](as: List[A])(z: B)(f: (B, A) => B): B =
+    as match {
+      case Nil => z
+      case h :: t => foldLeft(t)(f(z, h))(f)
+    }
+
+  val foldLeftInt: List[Int] => Int => ((Int, Int) => Int) => Int =
+    foldLeft[Int, Int]
+
+  val sum: List[Int] => Int = foldLeft(_)(0)(_ + _)
+
+  // Collection[_] List[_] Vector[_]
+  // Map[_, _]
+
+  object Scala2Example {
+    trait Sized[Collection[_]] {
+      def size[A](collection: Collection[A]): Int
+    }
+
+    object Sized {
+      implicit val ListSized: Sized[List] =
+        new Sized[List] {
+          def size[A](collection: List[A]): Int =
+            collection.length
+        }
+
+      implicit val VectorSized: Sized[Vector] =
+        new Sized[Vector] {
+          def size[A](collection: Vector[A]): Int =
+            collection.length
+        }
+
+      // Scala 2
+      implicit def MapSized[K]: Sized[( { type MapPartiallyApplied[V] = Map[K, V]})#MapPartiallyApplied ] =
+        new Sized[( { type MapPartiallyApplied[V] = Map[K, V]})#MapPartiallyApplied ] {
+          def size[V](collection: Map[K, V]): Int =
+            collection.size
+        }
+    }
+  }
+
+  object Scala3Example:
+    trait Sized[Collection[_]] {
+      def size[A](collection: Collection[A]): Int
+    }
+
+    object Sized {
+      given Sized[List] =
+        new Sized[List] {
+          def size[A](collection: List[A]): Int =
+            collection.length
+        }
+
+      given Sized[Vector] =
+        new Sized[Vector] {
+          def size[A](collection: Vector[A]): Int =
+            collection.length
+        }
+      
+      type MapPartiallyApplied[K] = [V] =>> Map[K, V]
+
+      // Scala 2
+      implicit def MapSized[K]: Sized[MapPartiallyApplied[K]] =
+        new Sized[MapPartiallyApplied[K]] {
+          def size[V](collection: Map[K, V]): Int =
+            collection.size
+        }
+    }
+
+}
 
 /**
  * Scala 3 introduces first-class support for "type lambdas", which previously had to 
@@ -438,6 +729,11 @@ object dependent_functions:
  */
 object type_lambdas:
   type MapK[K] = [V] =>> Map[K, V]
+  type MapPartiallyApplied[Key] = [Value] =>> Map[Key, Value]
+
+  type MapWithStringKey[Value] = MapPartiallyApplied[String][Value]
+
+  type MapStringInt = MapWithStringKey[Int]
 
   type MapString[V] = MapK[String][V]
 
@@ -452,7 +748,8 @@ object type_lambdas:
    * Define a `Sizable` for `Map` for the given key type `K`. You will have to 
    * use a type lambda.
    */
-  def sizableMap[K] = ???
+  def sizableMap[K] = new Sizable[MapK[K]]:
+    def size[V](fa: Map[K, V]): Int = fa.size
 
   /**
    * EXERCISE 2
@@ -461,14 +758,20 @@ object type_lambdas:
    * returns another type constructor that merely flips the order of type parameters to the first 
    * type constructor.
    */
-  type Flip[F[_, _]]
+  type Flip[F[_, _]] = [A, B] =>> F[B, A]
+
+  val example: Flip[Tuple2][Int, String] =
+    ("Adam", 42)
+
+  // Flip[Map[K, V]] == Map[V, K]
+  // Flip((Int, String)) == (String, Int)
 
   /**
    * EXERCISE 3
    * 
    * Use the `Flip` type constructor you defined to flip the order of type parameters to `Map`.
    */
-  type FlippedMap[K, V]
+  type FlippedMap[K, V] = Flip[Map][K, V]
 
   /**
    * EXERCISE 4
@@ -478,7 +781,12 @@ object type_lambdas:
    * constructor which takes one type parameter, returning the type constructed by the original 
    * type constructor, fully applied with both type parameters.
    */
-  type Curry[F[_, _]]
+  type Curry[F[_, _]] = [A] =>> [B] =>> F[A, B]
+
+  // Tuple2[Int, String]
+
+  val example2: Curry[Tuple2][Int][String] =
+    (42, "Adam")
 
   // Not supported... 
   // type Uncurry[F[_][_]] = [A, B] =>> F[A][B]
@@ -490,15 +798,26 @@ object type_lambdas:
    * syntax. Partially apply `Map` to the key type parameter with `K`, using the 
    * placeholder `*` for the value type parameter.
    */
-  // def sizableMap2[K] = sizableMap[K]
+  def sizableMap2[K] =  new Sizable[Map[K, *]]:
+    def size[V](fa: Map[K, V]): Int = fa.size
 
+object ContextFunctionsIntro {
+  import scala.concurrent.*
+
+  val myFutureFunction2: ExecutionContext ?=> Int => Future[Int] =
+    ???
+
+  def myFutureFunction(a: Int)(implicit ec: ExecutionContext): Future[Int] =
+    ???
+
+}
 
 /**
  * CONTEXT FUNCTIONS
  * 
  * Scala 3 introduces context functions, which are functions that depend on some context.
  */
-object context_functions:
+object context_functions extends App:
   trait Program:
     def addOp(op: Op): Unit 
   object Program:
@@ -541,21 +860,33 @@ object context_functions:
    * which use context functions to pass around a string builder that is used for printing the 
    * HTML fragments.
    */
-  def text(string: String): HTML[Unit] = ???
-  def p[A](inner: HTML[A]): HTML[A] = ???
+  def text(string: String): HTML[Unit] =
+    append(s"$string")
+  def p[A](inner: HTML[A]): HTML[A] = {
+    append("<p>")
+    val a = inner
+    append("</p>")
+    a
+  }
 
   type HTML[+A] = StringBuilder ?=> A
 
-  def makeHtml[A](html: HTML[A]): A = {
-    given StringBuilder = new StringBuilder()
+  def append(text: String)(using sb: StringBuilder): Unit =
+    sb.append(text)
 
+  def makeHtml(html: HTML[Any]): String = {
+    given sb: StringBuilder = new StringBuilder()
     html
+    sb.result
   }
 
   val example = 
     makeHtml {
       p(text("Hello World!"))
     }
+
+  println(example)
+  // <p>Hello World!</p>
   
   import scala.concurrent.* 
   type Task[+A] = ExecutionContext ?=> A
@@ -568,9 +899,9 @@ object context_functions:
    * `acceptsPermutation1`.
    */
   def permutation1: HTML[Task[Unit]] = ???
-  def permutation2: Task[HTML[Unit]] = ???
+  def permutation2: Task[HTML[Unit]] = permutation1
   def acceptsPermutation1(p: HTML[Task[Unit]]): Unit = () 
-  acceptsPermutation1(???)
+  acceptsPermutation1(permutation2)
 
   /**
    * EXERCISE 3
@@ -586,6 +917,8 @@ object context_functions:
   def task: Task[String] = ??? 
   def html: HTML[Int] = ???
 
+  def x: Task[HTML[(String, Int)]] = compose(task, html)
+
 /**
  * SINGLETON TYPES
  * 
@@ -600,7 +933,7 @@ object singleton_types:
    * 
    * Explicitly ascribe this literal value a singleton type.
    */
-  val trueValue = true
+  val trueValue: true = true
 
   /**
    * EXERCISE 2
@@ -608,21 +941,21 @@ object singleton_types:
    * Test to see if `true` is a subtype of `Boolean` by using the helper type function 
    * `IsSubtypeOf`.
    */
-  type trueSubtypeBoolean
+  type trueSubtypeBoolean = IsSubtypeOf[true, Boolean]
 
   /**
    * EXERCISE 3
    * 
    * Explicitly ascribe this literal value a singleton type.
    */
-  val stringValue = "name"
+  val stringValue: "name" = "name"
 
   /**
    * EXERCISE 4
    * 
    * Explicitly ascribe this literal value a singleton type.
    */
-  val floatValue = 3.1415f  
+  val floatValue: 3.1415f = 3.1415f  
 
   infix type IsSubtypeOf[A, B >: A]
 
@@ -637,5 +970,14 @@ object transparent_traits:
    * 
    * Mark the following trait as transparent by using the `transparent` keyword.
    */
-  trait KryoSerialize
+  transparent trait KryoSerialize
+  
+  sealed trait Result
+
+  // Result with Product with Serializable
+
+  case object Success extends Result with KryoSerialize
+  case object Failure extends Result with KryoSerialize
+
+  val xs = List(Success, Failure)
 

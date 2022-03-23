@@ -162,6 +162,6 @@ object ext_methods:
     // }
 
     // Scala 3
-    extension[A] (xs: MyList[Option[A]]) def mapInside[B](f: A => B): MyList[Option[B]] =
+    extension [A] (xs: MyList[Option[A]]) def mapInside[B](f: A => B): MyList[Option[B]] =
       xs.map(_.map(f))
   }

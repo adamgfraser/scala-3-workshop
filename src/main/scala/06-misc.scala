@@ -1,9 +1,18 @@
+
+
+
+type Email = String
+val x = 2
+def sum(x: Int, y: Int): Int = x + y
+trait Closeable
+
 /**
  * TOP-LEVEL DEFINITIONS
  * 
  * Scala 3 allows top-level definitions (variables, methods, and type aliases).
  */
 package top_level:
+
   /**
    * EXERCISE 1
    * 
@@ -42,9 +51,7 @@ object trait_parameters:
    * 
    * Remove the field `console`, and instead, introduce a trait parameter.
    */
-  trait Logging:
-    def console: Console
-
+  trait Logging(console: Console):
     def log(line: => String): Unit = console.print(line)
 
   /**
@@ -53,7 +60,7 @@ object trait_parameters:
    * Make the following class extend the trait `Logging`, and pass the trait
    * a value for its `Console` parameter.
    */
-  class StandardLogger  
+  class StandardLogger extends Logging(StandardConsole)
 
 /**
  * EXPLICIT NULLS
@@ -69,9 +76,32 @@ object explicit_nulls:
    * Make the following code compile by giving the value a union type that 
    * includes `Null`.
    */
-  // val stringOrNull: String = null
+  val stringOrNull: String | Null = null
 
-  
+  val adam = "Adam"
+  val ADAM = adam.toUpperCase
+
+  def someMethodFromAJavaAPI: String | Null =
+    ???
+
+  // Our definition
+  def optional[A](in: A | Null): Option[A] =
+    if (in != null) Some(in) else None
+
+  // Scala standard library
+  def apply[A](x: A): Option[A] =
+    if (x == null) None else Some(x)
+
+  val x = optional("Adam")
+
+  "Adam".toUpperCase
+
+  // A === String | Null
+  // Output === Option[String| Null]
+
+  def mySafeVersionOfLegacyMethod: Option[String] =
+    optional(someMethodFromAJavaAPI)
+
   /**
    * EXERCISE 2
    * 
@@ -79,7 +109,12 @@ object explicit_nulls:
    * variable into another local variable that can only be `String`. Then print it out to the 
    * console. Explain your findings.
    */
-  def printOutOnlyIfString(value: String | Null): Unit = ???
+  def printOutOnlyIfString(value: String | Null): Unit = {
+    optional(value) match {
+      case Some(s) => println(s)
+      case None =>
+    }
+  }
 
 
 /**
@@ -100,7 +135,28 @@ object creator_applications:
    * 
    * Simplify the construction of this `Logger` by using creator application.
    */
-  val logger = new Logger(println(_))
+  val logger = Logger(println(_))
+
+
+object ZIOExample:
+
+  trait Ref[A]:
+    def get: ZIO[Any, Nothing, A]
+    def set(a: A): ZIO[Any, Nothing, Unit]
+    def update(f: A => A): ZIO[Any, Nothing, Unit]
+
+  trait ZIO[-R, +E, +A]
+  trait ZStream[-R, +E, +A]
+
+  trait SubscriptionRef[A]:
+    export ref.*
+
+    def changes: ZStream[Any, Nothing, A]
+    val ref: Ref[A]
+
+  val subscriptionRef: SubscriptionRef[Int] = ???
+
+  subscriptionRef.update(_ + 1)
 
 /**
  * PROXIES
@@ -120,10 +176,12 @@ object proxies:
    * Make the following `Console` class extend `Logger`, but rather than 
    * implementing the `log` method directly, export it from the `logger` object.
    */
-  class Console(logger: Logger):
+  class Console(logger: Logger) extends Logger:
     def readLine(): String = scala.io.StdIn.readLine()
 
     def printLine(any: Any): Unit = println(any.toString())
+
+    export logger.*
     
 /**
  * PARAMETER UNTUPLING
@@ -140,7 +198,13 @@ object param_untupling:
    * Map over the "zipped" list of `numbers1` and `numbers2` using the 
    * `sum` function defined above.
    */
-  numbers1.zip(numbers2)
+  numbers1.zip(numbers2).map(_ + _)
+
+  numbers1.zip(numbers2).map { case (a, b) => a + b }
+
+  numbers1.zip(numbers2).map(tuple => ???)
+
+  val zipped = numbers1.zip(numbers2)
 
 /**
  * PROGRAMMATIC STRUCTURAL TYPES
@@ -181,7 +245,7 @@ object open_classes:
    * 
    * Add the keyword `final` to indicate this class is not designed for extension.
    */
-  class ConsoleLogger extends BaseLogger:
+  final class ConsoleLogger extends BaseLogger:
     override val logger = println(_)
 
 /**
@@ -192,10 +256,10 @@ object open_classes:
 object infix:
   final case class Predicate[-A](evaluate: A => Boolean):
     self =>
-      def and[A1 <: A](that: Predicate[A1]): Predicate[A1] = 
+      infix def and[A1 <: A](that: Predicate[A1]): Predicate[A1] = 
         Predicate(a1 => self.evaluate(a1) && that.evaluate(a1))
 
-      def or[A1 <: A](that: Predicate[A1]): Predicate[A1] = 
+      infix def or[A1 <: A](that: Predicate[A1]): Predicate[A1] = 
         Predicate(a1 => self.evaluate(a1) || that.evaluate(a1))
 
       def negate: Predicate[A] = Predicate(a => !evaluate(a))
@@ -209,5 +273,5 @@ object infix:
    * 
    * Make the following code compile by adding the `infix` keyword to the `or` operator.
    */
-  // val example = isGreaterThan(12) or isEqualTo(0)
+  val example = isGreaterThan(12) or isEqualTo(0)
 

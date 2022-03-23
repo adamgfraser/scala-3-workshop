@@ -15,7 +15,7 @@ object inline_basics:
    * Guarantee the Scala compiler will inline the following constant by using the `inline` keyword.
    * Then explicitly ascribe a type and note your findings.
    */
-  val LoggingEnabled = false 
+  inline val LoggingEnabled: false = false 
 
   /**
    * EXERCISE 2
@@ -23,8 +23,8 @@ object inline_basics:
    * Guarantee the Scala compiler will inline the following method anywhere it is applied, by using 
    * the `inline` keyword.
    */
-  def log(line: => String): Unit = 
-    if (LoggingEnabled) println(line)
+  inline def log(line: => String): Unit = 
+    if (LoggingEnabled) println(line) else ()
 
   /**
    * EXERCISE 3
@@ -40,13 +40,15 @@ object inline_recursion:
    * Using recursion, implement the power function, which raises the specified number to the 
    * specified integral power.
    */
-  inline def pow(num: Float, exp: Int): Float = ???
+  inline def pow(num: Float, exp: Int): Float =
+    if (exp == 0) 1 else num * pow(num, exp - 1)
+
   /**
    * EXERCISE 2
    * 
    * Compute the power of 10.5 raised to the power of 3.
    */
-  def `10.5 ^ 3` = ???
+  def `10.5 ^ 3` = pow(10.5f, 3)
 
   /**
    * EXERCISE 3
@@ -56,7 +58,8 @@ object inline_recursion:
   def `10.5 ^ 100` = ???
 
 object inline_transparent:
-  final case class Natural(value: Int)
+  final case class Natural(value: Int):
+    def *(that: Natural): Natural = new Natural(value * that.value)
   object Natural:
      /**
       * EXERCISE 1
@@ -64,25 +67,28 @@ object inline_transparent:
       * Apply the `transparent` modifier to this use of `inline` so the specific subtype of the 
       * return value will be reflected at the application site at compile-time.
       */
-    inline def apply(v: Int): Option[Natural] = 
+    transparent inline def apply(v: Int): Option[Natural] = 
       if (v >= 0) Some(new Natural(v)) else None
 
     def fromInt(v: Int): Option[Natural] = apply(v)
   end Natural
+
+  val one = Natural(1)
+  val none = Natural(-1)
   
   /**
    * EXERCISE 2
    * 
    * Define an implicit conversion from `Some[Natural]` to `Natural`.
    */
-  given Conversion[Some[Natural], Natural] = ???
+  given Conversion[Some[Natural], Natural] = _.get
 
   /**
    * EXERCISE 3
    * 
    * Change the type of `zero` to `Natural`, and explain why this does or does not compile.
    */
-  val zero: Option[Natural] = Natural(0)
+  val zero: Natural = Natural(0)
 
 object inline_conditional:
   import scala.compiletime.*
@@ -102,12 +108,58 @@ object inline_conditional:
       if (v >= 0) Some(new Natural(v)) else None
   end Natural
 
+  object ManualInlineExample:
+
+    object NoInline:
+
+      final case class Natural(value: Int) {
+        def *(that: Natural): Natural = new Natural(value * that.value)
+      }
+
+      object Natural:
+        transparent inline def apply(v: Int): Any =
+          inline if (v >= 0) new Natural(v) else error(s"Not a natural number")
+
+      val x = Natural(3)
+      val y = Natural(4)
+
+      x * y
+
+    end NoInline
+
+    object Inline:
+
+      final case class Natural(value: Int) {
+        def *(that: Natural): Natural = new Natural(value * that.value)
+      }
+
+      object Natural:
+        transparent inline def apply(v: Int): Any =
+          inline if (v >= 0) new Natural(v) else error("Not a natural number")
+
+      val x = new Natural(3)
+      val y = new Natural(4)
+
+      x * y
+
+    end Inline
+
+  // Source code bigger
+  // Don't use memory when you are running your program
+
+  // Inline when you can make decisions at compile time that will significantly simplify program
+  // Use more for either type safety or completely eliminating logic branches
+
+  inline val compileTimeValue = 42
+  val runtimeValue: Int = 42
+
   /**
    * EXERCISE 2
    * 
    * Create a natural number from an integer literal.
    */
-  def natural: Natural = ???
+  def compileTime = Natural(compileTimeValue)
+  val runtime = Natural.fromInt(runtimeValue)
 
   /**
    * EXERCISE 3
@@ -128,7 +180,10 @@ object inline_match:
    * Using an inline match and recursion, implement the following function, which converts a Natural
    * number into an integer.
    */
-  transparent inline def toInt(n: Natural): Int = ???
+  transparent inline def toInt(n: Natural): Int =
+    inline n match
+      case Zero => 0
+      case Succ(n) => toInt(n) + 1
 
   /**
    * EXERCISE 2
@@ -136,7 +191,7 @@ object inline_match:
    * Use the `toInt` function to convert `two` into an int. Ascribe it the most precise type you 
    * can.
    */
-  final val twoToInt = ???
+  val twoToInt: 2 = toInt(two)
 
   def two: Succ[Succ[Zero.type]] = Succ(Succ(Zero))
 
@@ -150,7 +205,8 @@ object compiletime:
    * 
    * Hint: You will have to mark `succ` as inline to call this function.
    */
-  def succ[N <: Int]: Int = ???
+  transparent inline def succ[N <: Int]: Int =
+    constValue[N] + 1
 
   /**
    * EXERCISE 2
@@ -158,7 +214,7 @@ object compiletime:
    * Call the function `succ` on the type `3`. Make any changes to `succ` that are necessary to 
    * type the result of `succ[3]` as `4`.
    */
-  def four = ???
+  def four: 4 = succ[3]
 
   /**
    * EXERCISE 3
@@ -167,7 +223,14 @@ object compiletime:
    * should return a `Some(n)` if the specified type is a singleton integer, and `None` 
    * otherwise.
    */
-  inline def natural[A]: Option[Int] = ???
+  transparent inline def natural[A <: Int]: Option[Int] =
+    inline constValueOpt[A] match
+      case Some(n) if n >= 0 => Some(n)
+      case _ => None
+
+  val test1 = natural[Int]
+  val test2 = natural[-1]
+  val test3 = natural[2]
 
   /**
    * EXERCISE 4
